@@ -4,7 +4,7 @@ db = SQLAlchemy()
 
 class Student(db.Model):
     __tablename__ = 'student'
-    student_id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     firstname = db.Column(db.String)
     lastname = db.Column(db.String)
 
@@ -28,7 +28,7 @@ class Student(db.Model):
 
 class Teacher(db.Model):
     __tablename__ = 'teacher'
-    teacher_id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     firstname = db.Column(db.String)
     lastname = db.Column(db.String)
     courses = db.Column(db.String)
@@ -54,7 +54,7 @@ class Teacher(db.Model):
 
 class Course(db.Model):
     __tablename__ = 'course'
-    course_id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     courseName = db.Column(db.String)
     author = db.Column(db.String)
     limit = db.Column(db.Integer)
