@@ -3,7 +3,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
 # local import
-from app.models import Student, db, Teacher, Course
+from app.models import Student, db, Teacher, Course, CourseInvites
 from instance.config import app_config
 from flask import request, jsonify, abort
 
@@ -111,7 +111,8 @@ def create_app(config_name):
                     students_arr = []
                     for std in course.course_students:
                         students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
-                    obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author, "students": (students_arr)}))
+                    obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName,
+                                            "author": course.author, "students": (students_arr)}))
                 results.append(obj)
 
             response = jsonify(results)
@@ -131,7 +132,7 @@ def create_app(config_name):
         for course in teacher.course_teachers:
             students_arr = []
             for std in course.course_students:
-                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+                students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
 
             obj['courses'].append(
                 ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
@@ -153,7 +154,7 @@ def create_app(config_name):
         for course in teacher.course_teachers:
             students_arr = []
             for std in course.course_students:
-                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+                students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
 
             obj['courses'].append(
                 ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
@@ -166,7 +167,7 @@ def create_app(config_name):
     def add_course(id):
         teacher = Teacher.query.filter_by(id=id).first()
         courseName = str(request.data.get('courseName', ''))
-        author = str(request.data.get('author', ''))
+        author = teacher.firstname
         limit = str(request.data.get('limit', ''))
 
         if courseName and author and limit:
@@ -196,7 +197,7 @@ def create_app(config_name):
         course.save()
 
         response = jsonify({
-            'updated_course': {"id": id, "name": courseName, "author": author}
+            'updated_course': {"id": id, "name": courseName, "author": author, "limit": limit}
         })
         response.status_code = 200
         return response
@@ -220,13 +221,12 @@ def create_app(config_name):
         course = Course.query.filter_by(id=course_id).first()
         student = Student.query.filter_by(id=id).first()
         if len(course.course_students) < int(course.limit):
-            print(course, student)
             course.course_students.append(student)
+            student.available_courses.append(course)
             course.save()
             return {"EDDED SUCCESSFULLY": "200"}
         else:
-            return {"NOOO": "4**"}
-        print(id, course_id)
+            return {"ERROR": "Немає місця", "limit": course.limit}
 
     @app.route('/students/', methods=['POST', 'GET'])
     def create_students():
@@ -244,41 +244,37 @@ def create_app(config_name):
                 response.status_code = 201
                 return response
 
-    return app
+    @app.route('/students/<int:student_id>/my_courses', methods=[ 'GET'])
+    def student_courses(student_id):
+        student = Student.query.filter_by(id=student_id).first()
+        # GET
+        obj = {
+            'id': student.id,
+            'firstname': student.firstname,
+            'lastname': student.lastname,
+            'courses': []
+        }
+        for course in student.available_courses:
+            students_arr = []
+            for std in course.course_students:
+                students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
 
-# @app.route('/student/<int:id>/', methods=['GET', 'PUT', 'DELETE'])
-# def students_del(id):
-#     # retrieve a buckelist using it's ID
-#     student = Student.query.filter_by(id=id).first()
-#     if not student:
-#         # Raise an HTTPException with a 404 not found status code
-#         abort(404)
-#
-#     if request.method == 'DELETE':
-#         student.delete()
-#         return {
-#                    "message": "bucketlist {} deleted successfully".format(student.id)
-#                }, 200
-#
-# elif request.method == 'PUT':
-#     firstname = str(request.data.get('firstname', ''))
-#     lastname = str(request.data.get('lastname', ''))
-#     student.firstname = firstname
-#     student.lastname = lastname
-#     student.save()
-#     response = jsonify({
-#         'id': student.id,
-#         'firstname': student.firstname,
-#         'lastname': student.lastname
-#     })
-#     response.status_code = 200
-#     return response
-#     else:
-#         # GET
-#         response = jsonify({
-#             'id': student.id,
-#             'firstname': student.firstname,
-#             'lastname': student.lastname
-#         })
-#         response.status_code = 200
-#         return response
+            obj['courses'].append(
+                ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
+                  "students": students_arr}))
+        response = jsonify(obj)
+        response.status_code = 200
+        return response
+
+
+    @app.route('/students/<int:student_id>/request_course/<int:course_id>', methods=['GET'])
+    def request_course(student_id, course_id):
+        course = Course.query.filter_by(id=course_id).first()
+        student = Student.query.filter_by(id=student_id).first()
+        invite = CourseInvites()
+        invite.invites.append(student)
+        print(CourseInvites.query.all())
+        invite.save()
+        return jsonify([{"status": "200", "course id": course.id, "student id": student.id}])
+
+    return app

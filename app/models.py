@@ -19,6 +19,11 @@ st2 = db.Table('course_teachers',
                db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True)
                )
 
+st3 = db.Table('check_invites',
+               db.Column('course_invites', db.Integer, db.ForeignKey('course_invites.id'), primary_key=True),
+               db.Column('student_id', db.Integer, db.ForeignKey('student.id'), primary_key=True)
+               )
+
 
 class Student(db.Model):
     __tablename__ = 'student'
@@ -100,6 +105,9 @@ class Course(db.Model):
 class CourseInvites(db.Model):
     __tablename__ = 'course_invites'
     id = db.Column(db.Integer, primary_key=True)
+    invites = db.relationship('Student', secondary=st3, lazy='subquery',
+                                        backref=db.backref('check_invites', lazy=True))
 
-    def __init__(self, courses):
-        self.courses = courses
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
