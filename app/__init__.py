@@ -1,3 +1,5 @@
+import json
+
 from flask_api import FlaskAPI
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -98,14 +100,20 @@ def create_app(config_name):
             # GET
             teachers = Teacher.get_all()
             results = []
-
+            arr = []
             for teacher in teachers:
+
                 obj = {
                     'id': teacher.id,
                     'firstname': teacher.firstname,
                     'lastname': teacher.lastname,
+                    'my_invites': [],
                     'courses': []
                 }
+                for one in teacher.my_invites:
+                    arr.append({"student_id":one.student_id, "course_id": one.course_id})
+
+                obj['my_invites'].append(arr)
 
                 for course in teacher.course_teachers:
                     students_arr = []
@@ -244,7 +252,7 @@ def create_app(config_name):
                 response.status_code = 201
                 return response
 
-    @app.route('/students/<int:student_id>/my_courses', methods=[ 'GET'])
+    @app.route('/students/<int:student_id>/my_courses', methods=['GET'])
     def student_courses(student_id):
         student = Student.query.filter_by(id=student_id).first()
         # GET
@@ -266,15 +274,65 @@ def create_app(config_name):
         response.status_code = 200
         return response
 
+    @app.route('/students/request_course/', methods=['POST'])
+    def request_course():
+        student_id = str(request.data.get('student_id', ''))
+        course_id = str(request.data.get('course_id', ''))
+        teacher_id = str(request.data.get('teacher_id', ''))
 
-    @app.route('/students/<int:student_id>/request_course/<int:course_id>', methods=['GET'])
-    def request_course(student_id, course_id):
-        course = Course.query.filter_by(id=course_id).first()
-        student = Student.query.filter_by(id=student_id).first()
-        invite = CourseInvites()
-        invite.invites.append(student)
-        print(CourseInvites.query.all())
-        invite.save()
-        return jsonify([{"status": "200", "course id": course.id, "student id": student.id}])
+        teacher = Teacher.query.filter_by(id=teacher_id).first()
+        course_invite = CourseInvites(status_accepted=False, course_id=course_id, student_id=student_id)
+        teacher.my_invites.append(course_invite)
+        teacher.save()
+        course_invite.save()
+        return jsonify([{"status_accepted": False, "course_id": course_id, "student_id": student_id}])
+
+    @app.route('/teachers/my_invites/<int:id>', methods=['GET'])
+    def teacher_invites(id):
+            teachers = [Teacher.query.filter_by(id=id).first()]
+            results = []
+            arr = []
+            for teacher in teachers:
+
+                obj = {
+                    'id': teacher.id,
+                    # 'firstname': teacher.firstname,
+                    # 'lastname': teacher.lastname,
+                    'my_invites': [],
+                    # 'courses': []
+                }
+                for one in teacher.my_invites:
+                    arr.append({"student_id":one.student_id, "course_id": one.course_id, "id": one.id, "status_accepted": one.status_accepted})
+
+                obj['my_invites'].append(arr)
+
+                for course in teacher.course_teachers:
+                    students_arr = []
+                    for std in course.course_students:
+                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+                    # obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName,
+                    #                         "author": course.author, "students": (students_arr)}))
+                results.append(obj)
+
+            response = jsonify(results)
+            response.status_code = 200
+            return response
+
+    @app.route('/teacher/accept_invite/<int:id>', methods=['GET'])
+    def accept_invite(id):
+        course_invite_check = CourseInvites.query.filter_by(id=id).first()
+        course_invite_check.status_accepted = True
+        this_course = Course.query.filter_by(id=course_invite_check.course_id).first()
+        this_student = Student.query.filter_by(id=course_invite_check.student_id).first()
+        course_invite_check.save()
+        if len(this_course.course_students) < int(this_course.limit):
+            this_course.course_students.append(this_student)
+            this_student.available_courses.append(this_course)
+            course_invite_check.delete()
+            this_course.save()
+            this_student.save()
+            return {"EDDED SUCCESSFULLY": "200"}
+        else:
+            return {"ERROR": "Немає місця", "limit": this_course.limit}
 
     return app

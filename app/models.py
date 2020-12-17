@@ -19,10 +19,15 @@ st2 = db.Table('course_teachers',
                db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True)
                )
 
-st3 = db.Table('check_invites',
+st3 = db.Table('teacher_my_invites',
                db.Column('course_invites', db.Integer, db.ForeignKey('course_invites.id'), primary_key=True),
-               db.Column('student_id', db.Integer, db.ForeignKey('student.id'), primary_key=True)
+               db.Column('teacher_id', db.Integer, db.ForeignKey('teacher.id'), primary_key=True)
                )
+
+# st4 = db.Table('teacher_my_invites',
+#                db.Column('course_invites', db.Integer, db.ForeignKey('course_invites.id'), primary_key=True),
+#                db.Column('teacher_id', db.Integer, db.ForeignKey('teacher.id'), primary_key=True)
+#                )
 
 
 class Student(db.Model):
@@ -57,6 +62,9 @@ class Teacher(db.Model):
     lastname = db.Column(db.String)
     course_teachers = db.relationship('Course', secondary=st2, lazy='subquery',
                                       backref=db.backref('course_teachers', lazy=True))
+    my_invites = db.relationship('CourseInvites', secondary=st3, lazy='subquery',
+                                        backref=db.backref('teacher_my_invites', lazy=True))
+
 
     def __init__(self, firstname, lastname):
         self.firstname = firstname
@@ -105,9 +113,19 @@ class Course(db.Model):
 class CourseInvites(db.Model):
     __tablename__ = 'course_invites'
     id = db.Column(db.Integer, primary_key=True)
-    invites = db.relationship('Student', secondary=st3, lazy='subquery',
-                                        backref=db.backref('check_invites', lazy=True))
+    status_accepted = db.Column(db.Boolean)
+    course_id = db.Column(db.Integer)
+    student_id = db.Column(db.Integer)
+
+    def __init__(self, status_accepted, course_id, student_id):
+        self.status_accepted = status_accepted
+        self.course_id = course_id
+        self.student_id = student_id
 
     def save(self):
         db.session.add(self)
+        db.session.commit()
+
+    def delete(self):
+        db.session.delete(self)
         db.session.commit()
