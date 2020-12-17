@@ -1,14 +1,33 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, backref
 
 db = SQLAlchemy()
+
+st = db.Table('available_courses',
+              db.Column('student_id', db.Integer, db.ForeignKey('student.id'), primary_key=True),
+              db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True)
+              )
+
+st1 = db.Table('course_students',
+               db.Column('student_id', db.Integer, db.ForeignKey('student.id'), primary_key=True),
+               db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True)
+               )
+
+st2 = db.Table('course_teachers',
+               db.Column('teacher_id', db.Integer, db.ForeignKey('teacher.id'), primary_key=True),
+               db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True)
+               )
+
 
 class Student(db.Model):
     __tablename__ = 'student'
     id = db.Column(db.Integer, primary_key=True)
     firstname = db.Column(db.String)
     lastname = db.Column(db.String)
+    available_courses = db.relationship('Course', secondary=st, lazy='subquery',
+                                        backref=db.backref('available_courses', lazy=True))
 
-    # available_courses = db.relationship('Course', secondary=st, backref=db.backref('available_courses', lazy='dynamic'))
     def __init__(self, firstname, lastname):
         self.firstname = firstname
         self.lastname = lastname
@@ -31,13 +50,12 @@ class Teacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     firstname = db.Column(db.String)
     lastname = db.Column(db.String)
-    courses = db.Column(db.String)
+    course_teachers = db.relationship('Course', secondary=st2, lazy='subquery',
+                                      backref=db.backref('course_teachers', lazy=True))
 
-    # teacher_courses = db.relationship('Course', secondary=st2, backref=db.backref('teacher_courses', lazy='dynamic'))
-    def __init__(self, firstname, lastname, courses):
+    def __init__(self, firstname, lastname):
         self.firstname = firstname
         self.lastname = lastname
-        self.courses = courses
 
     def save(self):
         db.session.add(self)
@@ -58,6 +76,8 @@ class Course(db.Model):
     courseName = db.Column(db.String)
     author = db.Column(db.String)
     limit = db.Column(db.Integer)
+    course_students = db.relationship('Student', secondary=st1, lazy='subquery',
+                                      backref=db.backref('course_students', lazy=True))
 
     def __init__(self, courseName, author, limit):
         self.courseName = courseName
@@ -75,3 +95,11 @@ class Course(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+
+
+class CourseInvites(db.Model):
+    __tablename__ = 'course_invites'
+    id = db.Column(db.Integer, primary_key=True)
+
+    def __init__(self, courses):
+        self.courses = courses
