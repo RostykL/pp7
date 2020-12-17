@@ -104,13 +104,16 @@ def create_app(config_name):
                     'id': teacher.id,
                     'firstname': teacher.firstname,
                     'lastname': teacher.lastname,
-                    'teacher courses': []
+                    'courses': []
                 }
-                for course in teacher.course_teachers:
-                    obj['teacher courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName,
-                                                    "author": course.author, "students": course.course_students}))
 
+                for course in teacher.course_teachers:
+                    students_arr = []
+                    for std in course.course_students:
+                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+                    obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author, "students": (students_arr)}))
                 results.append(obj)
+
             response = jsonify(results)
             response.status_code = 200
             return response
@@ -126,9 +129,13 @@ def create_app(config_name):
             'courses': []
         }
         for course in teacher.course_teachers:
+            students_arr = []
+            for std in course.course_students:
+                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+
             obj['courses'].append(
                 ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
-                  "students": course.course_students}))
+                  "students": students_arr}))
         response = jsonify(obj)
         response.status_code = 200
         return response
@@ -144,9 +151,13 @@ def create_app(config_name):
             'courses': []
         }
         for course in teacher.course_teachers:
+            students_arr = []
+            for std in course.course_students:
+                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+
             obj['courses'].append(
                 ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
-                  "students": course.course_students}))
+                  "students": students_arr}))
         response = jsonify(obj)
         response.status_code = 200
         return response
@@ -203,8 +214,35 @@ def create_app(config_name):
                        "message": "Course {} deleted successfully".format(course.id)
                    }, 200
 
-    # @app.route('')
+    # без request body!
+    @app.route('/teachers/add_students/<int:id>/to/<int:course_id>', methods=['GET'])
+    def add_student_to(id, course_id):
+        course = Course.query.filter_by(id=course_id).first()
+        student = Student.query.filter_by(id=id).first()
+        if len(course.course_students) < int(course.limit):
+            print(course, student)
+            course.course_students.append(student)
+            course.save()
+            return {"EDDED SUCCESSFULLY": "200"}
+        else:
+            return {"NOOO": "4**"}
+        print(id, course_id)
 
+    @app.route('/students/', methods=['POST', 'GET'])
+    def create_students():
+        if request.method == "POST":
+            firstname = str(request.data.get('firstname', ''))
+            lastname = str(request.data.get('lastname', ''))
+            if firstname:
+                student = Student(firstname=firstname, lastname=lastname)
+                student.save()
+                response = jsonify({
+                    'id': student.id,
+                    'firstname': student.firstname,
+                    'lastname': student.lastname,
+                })
+                response.status_code = 201
+                return response
 
     return app
 
