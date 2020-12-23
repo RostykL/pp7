@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, backref
+from flask_bcrypt import Bcrypt
 
 db = SQLAlchemy()
 
@@ -37,10 +38,15 @@ class Student(db.Model):
     lastname = db.Column(db.String)
     available_courses = db.relationship('Course', secondary=st, lazy='subquery',
                                         backref=db.backref('available_courses', lazy=True))
+    password = db.Column(db.String(256), nullable=False)
+    username = db.Column(db.String(256), nullable=False, unique=True)
 
-    def __init__(self, firstname, lastname):
+
+    def __init__(self, firstname, lastname, password, username):
         self.firstname = firstname
         self.lastname = lastname
+        self.password = Bcrypt().generate_password_hash(password).decode()
+        self.username = username
 
     def save(self):
         db.session.add(self)
@@ -64,11 +70,16 @@ class Teacher(db.Model):
                                       backref=db.backref('course_teachers', lazy=True))
     my_invites = db.relationship('CourseInvites', secondary=st3, lazy='subquery',
                                         backref=db.backref('teacher_my_invites', lazy=True))
+    password = db.Column(db.String(256), nullable=False)
+    username = db.Column(db.String(256), nullable=False, unique=True)
 
 
-    def __init__(self, firstname, lastname):
+    def __init__(self, firstname, lastname, password, username):
         self.firstname = firstname
         self.lastname = lastname
+        self.password = Bcrypt().generate_password_hash(password).decode()
+        self.username = username
+
 
     def save(self):
         db.session.add(self)

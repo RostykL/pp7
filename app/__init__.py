@@ -19,75 +19,15 @@ def create_app(config_name):
     migrate = Migrate(app, db)
     db.init_app(app)
 
-    @app.route('/get', methods=['GET'])
-    def test():
-        rostyk = Student(
-            firstname="Rostyk",
-            lastname='Lukavyi',
-        )
-        adam = Student(
-            firstname="adam",
-            lastname='adaaaam',
-        )
-        rostyk.save()
-        math_course = Course(
-            courseName="Math",
-            author="Christopher Bishop",
-            limit=4,
-        )
-        math_course.save()
-
-        ph_course = Course(
-            courseName="physics",
-            author="Bishop",
-            limit=5,
-        )
-        ph_course.save()
-        rostyk.available_courses.append(math_course)
-        rostyk.available_courses.append(ph_course)
-        adam.available_courses.append(ph_course)
-        math_course.course_students.append(rostyk)
-        ph_course.course_students.append(rostyk)
-        ph_course.course_students.append(adam)
-
-        courses_students_arr = []
-        results = []
-        for course in rostyk.available_courses:
-            obj = {
-                'id': course.id,
-                'courseName': course.courseName,
-                'author': course.author,
-                'limit': course.limit,
-                'students': []
-            }
-            for student in Course.query.filter_by(id=course.id).first().course_students:
-                obj['students'].append(({"name": student.firstname, "lastname": student.lastname}))
-            results.append(obj)
-        response = jsonify(results)
-        return response
-
-    # @app.route('/get_course', methods=['GET'])
-    # def test():
-    #
-    #     # results = []
-    #     # for course in rostyk.available_courses:
-    #     #     obj = {
-    #     #         'id': course.id,
-    #     #         'courseName': course.courseName,
-    #     #         'author': course.author,
-    #     #         'limit': course.limit
-    #     #     }
-    #     #     results.append(obj)
-    #     response = jsonify(results)
-    #     return response
-
     @app.route('/teachers/', methods=['POST', 'GET'])
     def create_teacher():
         if request.method == "POST":
             firstname = str(request.data.get('firstname', ''))
             lastname = str(request.data.get('lastname', ''))
-            if firstname:
-                teacher = Teacher(firstname=firstname, lastname=lastname)
+            username = str(request.data.get('username', ''))
+            password = str(request.data.get('password', ''))
+            if firstname and lastname and username and password:
+                teacher = Teacher(firstname=firstname, lastname=lastname, username=username, password=password)
                 teacher.save()
                 response = jsonify({
                     'id': teacher.id,
@@ -96,9 +36,15 @@ def create_app(config_name):
                 })
                 response.status_code = 201
                 return response
+            else:
+                return {"ERROR": "Введіть всі поля firstname and lastname and username and password",
+                        "STATUS CODE": 405}
         else:
             # GET
             teachers = Teacher.get_all()
+            if (not teachers):
+                return {"ERROR": "Немає вчителів", "STATUS CODE": 404}
+
             results = []
             arr = []
             for teacher in teachers:
@@ -111,7 +57,7 @@ def create_app(config_name):
                     'courses': []
                 }
                 for one in teacher.my_invites:
-                    arr.append({"student_id":one.student_id, "course_id": one.course_id})
+                    arr.append({"student_id": one.student_id, "course_id": one.course_id})
 
                 obj['my_invites'].append(arr)
 
@@ -127,31 +73,48 @@ def create_app(config_name):
             response.status_code = 200
             return response
 
-    @app.route('/teachers/<int:id>/', methods=['GET'])
+    @app.route('/teachers/<int:id>/', methods=['GET', 'DELETE'])
     def teacher(id):
-        teacher = Teacher.query.filter_by(id=id).first()
-        # GET
-        obj = {
-            'id': teacher.id,
-            'firstname': teacher.firstname,
-            'lastname': teacher.lastname,
-            'courses': []
-        }
-        for course in teacher.course_teachers:
-            students_arr = []
-            for std in course.course_students:
-                students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+        if request.method == "GET":
+            teacher = Teacher.query.filter_by(id=id).first()
+            if (not teacher):
+                return {"ERROR": "Немає вчителя", "STATUS CODE": 404}
 
-            obj['courses'].append(
-                ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
-                  "students": students_arr}))
-        response = jsonify(obj)
-        response.status_code = 200
-        return response
+            # GET
+            obj = {
+                'id': teacher.id,
+                'firstname': teacher.firstname,
+                'lastname': teacher.lastname,
+                'courses': []
+            }
+            for course in teacher.course_teachers:
+                students_arr = []
+                for std in course.course_students:
+                    students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+
+                obj['courses'].append(
+                    ({"id": course.id, "limit": course.limit, "title": course.courseName, "author": course.author,
+                      "students": students_arr}))
+            response = jsonify(obj)
+            response.status_code = 200
+            return response
+        else:
+            teacher = Teacher.query.filter_by(id=id).first()
+            if not teacher:
+                return {"ERROR": "Немає даного вчителя", "STATUS CODE": 405}
+
+            if request.method == 'DELETE':
+                teacher.delete()
+                return {
+                           "message": "Teacher {} deleted successfully".format(teacher.id)
+                       }, 200
 
     @app.route('/teachers/<int:id>/my_courses', methods=['GET'])
     def teacher_my_courses(id):
         teacher = Teacher.query.filter_by(id=id).first()
+        if (not teacher):
+            return {"ERROR": "Немає вчителя", "STATUS CODE": 404}
+
         # GET
         obj = {
             'id': teacher.id,
@@ -192,6 +155,8 @@ def create_app(config_name):
             })
             response.status_code = 201
             return response
+        else:
+            return {"ERROR": "Введіть всі поля courseName and author and limit", "STATUS CODE": 405}
 
     @app.route('/teachers/update_course/<int:id>', methods=['PUT'])
     def update_course(id):
@@ -199,6 +164,8 @@ def create_app(config_name):
         courseName = str(request.data.get('courseName', ''))
         author = str(request.data.get('author', ''))
         limit = str(request.data.get('limit', ''))
+        if (not courseName and not author and not limit):
+            return {"ERROR": "Введіть всі поля courseName and author and  limit", "STATUS CODE": 405}
         course.courseName = courseName
         course.author = author
         course.limit = limit
@@ -214,8 +181,7 @@ def create_app(config_name):
     def delete_course(id):
         course = Course.query.filter_by(id=id).first()
         if not course:
-            # Raise an HTTPException with a 404 not found status code
-            abort(404)
+            return {"ERROR": "Немає даного курсу", "STATUS CODE": 405}
 
         if request.method == 'DELETE':
             course.delete()
@@ -241,8 +207,10 @@ def create_app(config_name):
         if request.method == "POST":
             firstname = str(request.data.get('firstname', ''))
             lastname = str(request.data.get('lastname', ''))
-            if firstname:
-                student = Student(firstname=firstname, lastname=lastname)
+            username = str(request.data.get('username', ''))
+            password = str(request.data.get('password', ''))
+            if firstname and lastname and username and password:
+                student = Student(firstname=firstname, lastname=lastname, username=username, password=password)
                 student.save()
                 response = jsonify({
                     'id': student.id,
@@ -251,10 +219,44 @@ def create_app(config_name):
                 })
                 response.status_code = 201
                 return response
+            else:
+                return {"ERROR": "Введіть всі поля firstname and lastname and username and password",
+                        "STATUS CODE": 405}
+        else:
+            students = Student.get_all()
+            result = []
+            for student in students:
+                obj = {
+                    "id": student.id,
+                    "firstname": student.firstname,
+                    "lastname": student.lastname,
+                    "username": student.username,
+                    "password": student.password,
+                }
+                result.append(obj)
+
+            response = jsonify(result)
+            response.status_code = 200
+            return response
+
+    @app.route('/student/<int:id>', methods=['DELETE'])
+    def delete_student(id):
+        if request.method == "DELETE":
+            student = Student.query.filter_by(id=id).first()
+            if not student:
+                return {"ERROR": "Немає даного студента", "STATUS CODE": 405}
+
+            if request.method == 'DELETE':
+                student.delete()
+                return {
+                           "message": "Student {} deleted successfully".format(student.id)
+                       }, 200
 
     @app.route('/students/<int:student_id>/my_courses', methods=['GET'])
     def student_courses(student_id):
         student = Student.query.filter_by(id=student_id).first()
+        if (not student):
+            return {"ERROR": "Немає студента", "STATUS CODE": 404}
         # GET
         obj = {
             'id': student.id,
@@ -279,6 +281,8 @@ def create_app(config_name):
         student_id = str(request.data.get('student_id', ''))
         course_id = str(request.data.get('course_id', ''))
         teacher_id = str(request.data.get('teacher_id', ''))
+        if (not student_id and not course_id and not teacher_id):
+            return {"ERROR": "Введіть всі поля  student_id and  course_id and  teacher_id", "STATUS CODE": "405"}
 
         teacher = Teacher.query.filter_by(id=teacher_id).first()
         course_invite = CourseInvites(status_accepted=False, course_id=course_id, student_id=student_id)
@@ -289,38 +293,43 @@ def create_app(config_name):
 
     @app.route('/teachers/my_invites/<int:id>', methods=['GET'])
     def teacher_invites(id):
-            teachers = [Teacher.query.filter_by(id=id).first()]
-            results = []
-            arr = []
-            for teacher in teachers:
+        teachers = [Teacher.query.filter_by(id=id).first()]
+        if (not teachers[0]):
+            return {"ERROR": "немає конкретного студента", "STATUS CODE": 404}
+        results = []
+        arr = []
+        for teacher in teachers:
 
-                obj = {
-                    'id': teacher.id,
-                    # 'firstname': teacher.firstname,
-                    # 'lastname': teacher.lastname,
-                    'my_invites': [],
-                    # 'courses': []
-                }
-                for one in teacher.my_invites:
-                    arr.append({"student_id":one.student_id, "course_id": one.course_id, "id": one.id, "status_accepted": one.status_accepted})
+            obj = {
+                'id': teacher.id,
+                # 'firstname': teacher.firstname,
+                # 'lastname': teacher.lastname,
+                'my_invites': [],
+                # 'courses': []
+            }
+            for one in teacher.my_invites:
+                arr.append({"student_id": one.student_id, "course_id": one.course_id, "id": one.id,
+                            "status_accepted": one.status_accepted})
 
-                obj['my_invites'].append(arr)
+            obj['my_invites'].append(arr)
 
-                for course in teacher.course_teachers:
-                    students_arr = []
-                    for std in course.course_students:
-                        students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
-                    # obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName,
-                    #                         "author": course.author, "students": (students_arr)}))
-                results.append(obj)
+            for course in teacher.course_teachers:
+                students_arr = []
+                for std in course.course_students:
+                    students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
+                # obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName,
+                #                         "author": course.author, "students": (students_arr)}))
+            results.append(obj)
 
-            response = jsonify(results)
-            response.status_code = 200
-            return response
+        response = jsonify(results)
+        response.status_code = 200
+        return response
 
     @app.route('/teacher/accept_invite/<int:id>', methods=['GET'])
     def accept_invite(id):
         course_invite_check = CourseInvites.query.filter_by(id=id).first()
+        if (not course_invite_check):
+            return {"ERROR": "немає конкретного", "STATUS CODE": 404}
         course_invite_check.status_accepted = True
         this_course = Course.query.filter_by(id=course_invite_check.course_id).first()
         this_student = Student.query.filter_by(id=course_invite_check.student_id).first()
@@ -334,5 +343,34 @@ def create_app(config_name):
             return {"EDDED SUCCESSFULLY": "200"}
         else:
             return {"ERROR": "Немає місця", "limit": this_course.limit}
+
+    @app.route('/courses', methods=['GET'])
+    def get_courses():
+        courses = Course.get_all()
+        result = []
+        for course in courses:
+            obj = {
+                "id": course.id,
+                "courseName": course.courseName,
+                "author": course.author,
+                "limit": course.limit,
+            }
+            result.append(obj)
+
+        response = jsonify(result)
+        response.status_code = 200
+        return response
+
+    @app.route('/courses/<int:id>', methods=['DELETE'])
+    def del_course(id):
+        course = Course.query.filter_by(id=id).first()
+        if not course:
+            return {"ERROR": "Немає даного курсу", "STATUS CODE": 405}
+
+        if request.method == 'DELETE':
+            course.delete()
+            return {
+                       "message": "Course {} deleted successfully".format(course.id)
+                   }, 200
 
     return app
