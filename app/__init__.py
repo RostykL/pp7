@@ -102,7 +102,6 @@ def create_app(config_name):
             teacher = Teacher.query.filter_by(id=id).first()
             if not teacher:
                 return {"ERROR": "Немає даного вчителя", "STATUS CODE": 405}
-
             if request.method == 'DELETE':
                 teacher.delete()
                 return {
