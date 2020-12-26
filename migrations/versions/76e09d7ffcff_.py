@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 7fec6a7ff9cb
+Revision ID: 76e09d7ffcff
 Revises: 
-Create Date: 2020-12-17 16:21:37.087122
+Create Date: 2020-12-23 16:00:42.212973
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '7fec6a7ff9cb'
+revision = '76e09d7ffcff'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -37,18 +37,20 @@ def upgrade():
     sa.Column('firstname', sa.String(), nullable=True),
     sa.Column('lastname', sa.String(), nullable=True),
     sa.Column('password', sa.String(length=256), nullable=False),
-    sa.Column('username', sa.String(length=256), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('username')
+    sa.Column('email', sa.VARCHAR(length=30), nullable=False),
+    sa.Column('role', sa.VARCHAR(length=255), nullable=False),
+    sa.Column('username', sa.VARCHAR(length=20), nullable=False),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('teacher',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('firstname', sa.String(), nullable=True),
     sa.Column('lastname', sa.String(), nullable=True),
     sa.Column('password', sa.String(length=256), nullable=False),
-    sa.Column('username', sa.String(length=256), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('username')
+    sa.Column('email', sa.VARCHAR(length=30), nullable=False),
+    sa.Column('role', sa.VARCHAR(length=255), nullable=False),
+    sa.Column('username', sa.VARCHAR(length=20), nullable=False),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('available_courses',
     sa.Column('student_id', sa.Integer(), nullable=False),
