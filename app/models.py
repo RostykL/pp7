@@ -28,6 +28,45 @@ st3 = db.Table('teacher_my_invites',
                )
 
 
+
+class Admin(db.Model):
+    __tablename__ = 'admin'
+    id = db.Column(db.Integer, primary_key=True)
+    firstname = db.Column(db.String)
+    lastname = db.Column(db.String)
+    password = db.Column(db.String(256), nullable=False)
+    email = db.Column('email', db.VARCHAR(30), nullable=False)
+    role = db.Column('role', db.VARCHAR(255), nullable=False)
+    username = db.Column('username', db.VARCHAR(20), nullable=False)
+
+    def __init__(self, firstname, lastname, password, email, role, username):
+        self.firstname = firstname
+        self.lastname = lastname
+        self.password = Bcrypt().generate_password_hash(password).decode()
+        self.email = email
+        self.role = role
+        self.username = username
+
+    def password_is_valid(self, password):
+        return Bcrypt().check_password_hash(self.password, password)
+
+    def get_role(self):
+        return self.role
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+
+    @staticmethod
+    def get_all():
+        return Admin.query.all()
+
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+
+
+
 class Student(db.Model):
     __tablename__ = 'student'
     id = db.Column(db.Integer, primary_key=True)

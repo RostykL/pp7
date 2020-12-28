@@ -5,7 +5,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
 # local import
-from app.models import Student, db, Teacher, Course, CourseInvites
+from app.models import Student, db, Teacher, Course, CourseInvites, Admin
 from instance.config import app_config
 from flask import request, jsonify, abort, make_response
 from flask_httpauth import HTTPBasicAuth
@@ -19,11 +19,15 @@ def verify_password(email, password):
     if not (email and password):
         return False
     user = ''
+    admin = Admin.query.filter_by(email=email).first()
     teacher = Teacher.query.filter_by(email=email).first()
-    if (not teacher):
-        user = Student.query.filter_by(email=email).first()
-    else:
+    student = Student.query.filter_by(email=email).first()
+    if admin:
+        user = admin
+    elif teacher:
         user = teacher
+    else:
+        user = student
     # print(userTest, 'hi')
     if user is None:
         return False
@@ -53,6 +57,38 @@ def create_app(config_name):
     migrate = Migrate(app, db)
     db.init_app(app)
 
+    @app.route('/api/create_admin/', methods=['POST'])
+    def create_admin():
+        if request.method == "POST":
+            firstname = str(request.data.get('firstname', ''))
+            lastname = str(request.data.get('lastname', ''))
+            email = str(request.data.get('email', ''))
+            password = str(request.data.get('password', ''))
+            username = str(request.data.get('username', ''))
+            role = str(request.data.get('role', ''))
+            if Admin.query.filter_by(email=email).first() is not None:
+                return {"email": "такий email вже зайнятий STATUS CODE 400"}
+
+            if Admin.query.filter_by(username=username).first() is not None:
+                return {"email": "такий username вже зайнятий STATUS CODE 400"}
+            if firstname and lastname and email and password:
+                admin = Admin(firstname=firstname, lastname=lastname, email=email, password=password, role=role,
+                              username=username)
+                admin.save()
+                response = jsonify({
+                    'id': admin.id,
+                    'firstname': admin.firstname,
+                    'lastname': admin.lastname,
+                    'role': admin.role,
+                    'username': admin.username,
+                    'email': admin.email
+                })
+                response.status_code = 201
+                return response
+            else:
+                return {"ERROR": "Введіть всі поля firstname and lastname and email and password",
+                        "STATUS CODE": 405}
+
     @app.route('/api/create_teacher/', methods=['POST'])
     def create_teacher():
         if request.method == "POST":
@@ -64,6 +100,9 @@ def create_app(config_name):
             role = str(request.data.get('role', ''))
             if Teacher.query.filter_by(email=email).first() is not None:
                 return {"email": "такий email вже зайнятий STATUS CODE 400"}
+
+            if Teacher.query.filter_by(username=username).first() is not None:
+                return {"email": "такий username вже зайнятий STATUS CODE 400"}
             if firstname and lastname and email and password:
                 teacher = Teacher(firstname=firstname, lastname=lastname, email=email, password=password, role=role,
                                   username=username)
@@ -72,7 +111,9 @@ def create_app(config_name):
                     'id': teacher.id,
                     'firstname': teacher.firstname,
                     'lastname': teacher.lastname,
-                    'role': teacher.role
+                    'role': teacher.role,
+                    'username': teacher.username,
+                    'email': teacher.email
                 })
                 response.status_code = 201
                 return response
@@ -91,6 +132,8 @@ def create_app(config_name):
             role = str(request.data.get('role', ''))
             if Student.query.filter_by(email=email).first() is not None:
                 return {"email": "такий email вже зайнятий STATUS CODE 400"}
+            if Student.query.filter_by(username=username).first() is not None:
+                return {"email": "такий username вже зайнятий STATUS CODE 400"}
             if firstname and lastname and email and password:
                 student = Student(firstname=firstname, lastname=lastname, email=email, password=password, role=role,
                                   username=username)
@@ -111,6 +154,7 @@ def create_app(config_name):
     def get_teacher():
         # GET
         teachers = Teacher.get_all()
+        print(teachers)
         if (not teachers):
             return {"ERROR": "Немає вчителів", "STATUS CODE": 404}
 
@@ -122,6 +166,9 @@ def create_app(config_name):
                 'id': teacher.id,
                 'firstname': teacher.firstname,
                 'lastname': teacher.lastname,
+                'username': teacher.username,
+                'email': teacher.email,
+                'role': teacher.role,
                 'my_invites': [],
                 'courses': []
             }
@@ -157,6 +204,8 @@ def create_app(config_name):
                 'id': teacher.id,
                 'firstname': teacher.firstname,
                 'lastname': teacher.lastname,
+                'email': teacher.email,
+                'role': teacher.role,
                 'courses': []
             }
             for course in teacher.course_teachers:
@@ -171,32 +220,40 @@ def create_app(config_name):
             response.status_code = 200
             return response
 
-    @app.route('/teacher/delete_teacher/<int:id>', methods=['DELETE'])
+    # Може видаляти тільки Адмін
+    @app.route('/teacher/delete_teacher/<int:id>/', methods=['DELETE'])  # admin
     @auth.login_required
     def delete_teacher(id):
         teacher = Teacher.query.filter_by(id=id).first()
         email = auth.current_user()
-        if not Teacher.query.filter_by(email=email).first():
-            student = Student.query.filter_by(email=email).first()
-            if student:
-                return bad_role('student')
-            return {"ERROR": "Немає даного вчителя", "STATUS CODE": 405}
-        if request.method == 'DELETE':
-            teacher.delete()
-            return {
-                       "message": "Teacher {} deleted successfully".format(teacher.id)
-                   }, 200
+        admin = Admin.query.filter_by(email=email).first()
+        if(admin) :
+            if(not teacher):
+                return {"ERROR": "Немає даного вчителя", "STATUS CODE": 405}
+            if request.method == 'DELETE':
+                teacher.delete()
+                return {
+                           "message": "Teacher {} deleted successfully".format(teacher.id)
+                       }, 200
+        else:
+            return {"ERROR" : "Ви не має прав адміністратора"}
 
-    @app.route('/teachers/<int:id>/my_courses', methods=['GET'])
+    @app.route('/teachers/<int:id>/my_courses/', methods=['GET'])
     @auth.login_required
     def teacher_my_courses(id):
         teacher = Teacher.query.filter_by(id=id).first()
         email = auth.current_user()
+        admin = Admin.query.filter_by(email=email).first()
+
+        if (not teacher):
+            return {"ERROR": "Немає вчителя", "STATUS CODE": 404}
         if (not Teacher.query.filter_by(email=email).first()):
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
-            return {"ERROR": "Немає вчителя", "STATUS CODE": 404}
+        if( not admin):
+            if (teacher.email != email):
+                return {"Помилка доступу": "Ви не можете переглядати курси іншого вчителя"}
 
         # GET
         obj = {
@@ -217,17 +274,23 @@ def create_app(config_name):
         response.status_code = 200
         return response
 
-    @app.route('/teachers/<int:id>/add_course', methods=['POST'])
+    @app.route('/teachers/<int:id>/add_course/', methods=['POST'])
     @auth.login_required
     def add_course(id):
         teacher = Teacher.query.filter_by(id=id).first()
         email = auth.current_user()
+        admin = Admin.query.filter_by(email=email).first()
+        if (not teacher):
+            return {"ERROR": "Немає вчителя", "STATUS CODE": 404}
         if not Teacher.query.filter_by(email=email).first():
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
+        if(not admin):
+            if (teacher.email != email):
+                return {"Помилка доступу": "Ви не можете додавати курси іншому вчителю"}
         courseName = str(request.data.get('courseName', ''))
-        author = teacher.firstname
+        author = teacher.username
         limit = str(request.data.get('limit', ''))
 
         if courseName and author and limit:
@@ -247,7 +310,7 @@ def create_app(config_name):
         else:
             return {"ERROR": "Введіть всі поля courseName and author and limit", "STATUS CODE": 405}
 
-    @app.route('/teachers/update_course/<int:id>', methods=['PUT'])
+    @app.route('/teachers/update_course/<int:id>/', methods=['PUT'])
     @auth.login_required
     def update_course(id):
         course = Course.query.filter_by(id=id).first()
@@ -255,34 +318,53 @@ def create_app(config_name):
         author = str(request.data.get('author', ''))
         limit = str(request.data.get('limit', ''))
         email = auth.current_user()
+        current_teacher = Teacher.query.filter_by(email=email).first()
+        admin = Admin.query.filter_by(email=email).first()
+
+
+        if not course:
+            return {"ERROR" : "немає даного курсу STATUC CODE 404"}
         if not Teacher.query.filter_by(email=email).first():
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
-        if (not courseName and not author and not limit):
+        if (not courseName or not limit):
             return {"ERROR": "Введіть всі поля courseName and author and  limit", "STATUS CODE": 405}
-        course.courseName = courseName
-        course.author = author
+        if(not admin):
+            if (current_teacher.firstname.lower() != course.author.lower()):
+                return {"Помилка доступу": "Ви не можете оновлювати курси іншого вчителя"}
+                course.courseName = courseName
+                if (len(author) == 0):
+                    course.author = current_teacher.firstname
+                else:
+                    course.author = author
         course.limit = limit
         course.save()
 
         response = jsonify({
-            'updated_course': {"id": id, "name": courseName, "author": author, "limit": limit}
+            'updated_course': {"id": id, "name": courseName, "author": course.author, "limit": limit}
         })
         response.status_code = 200
         return response
 
-    @app.route('/teachers/delete_course/<int:id>', methods=['DELETE'])
+    @app.route('/teachers/delete_course/<int:id>/', methods=['DELETE'])
     @auth.login_required
     def delete_course(id):
         email = auth.current_user()
+        admin = Admin.query.filter_by(email=email).first()
+
         if not Teacher.query.filter_by(email=email).first():
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
         course = Course.query.filter_by(id=id).first()
+        current_teacher = Teacher.query.filter_by(email=email).first()
+
         if not course:
             return {"ERROR": "Немає даного курсу", "STATUS CODE": 405}
+        if(not admin):
+            if (current_teacher.firstname.lower() != course.author.lower()):
+                return {"Помилка доступу": "Ви не можете видалити не свій курс"}
 
         if request.method == 'DELETE':
             course.delete()
@@ -291,16 +373,23 @@ def create_app(config_name):
                    }, 200
 
     # без request body!
-    @app.route('/teachers/add_students/<int:id>/to/<int:course_id>', methods=['GET'])
+    @app.route('/teachers/add_students/<int:id>/to/<int:course_id>/', methods=['POST'])
     @auth.login_required
     def add_student_to(id, course_id):
         email = auth.current_user()
+        admin = Admin.query.filter_by(email=email).first()
         if not Teacher.query.filter_by(email=email).first():
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
         course = Course.query.filter_by(id=course_id).first()
+        if(not course):
+            return {"Error": "немає такого курсу STATUS CODE 404"}
         student = Student.query.filter_by(id=id).first()
+        current_teacher = Teacher.query.filter_by(email=email).first()
+        if(not admin):
+            if (current_teacher.firstname.lower() != course.author.lower()):
+                return {"Помилка доступу": "Ви не можете додавати студентів до не свого курсу"}
         if len(course.course_students) < int(course.limit):
             course.course_students.append(student)
             student.available_courses.append(course)
@@ -309,7 +398,7 @@ def create_app(config_name):
         else:
             return {"ERROR": "Немає місця", "limit": course.limit}
 
-    @app.route('/students/', methods=['POST', 'GET'])
+    @app.route('/students/', methods=['GET'])
     def get_students():
         students = Student.get_all()
         email = auth.current_user()
@@ -325,7 +414,6 @@ def create_app(config_name):
                 "lastname": student.lastname,
                 "username": student.username,
                 "email": student.email,
-                "password": student.password,
             }
             result.append(obj)
 
@@ -333,7 +421,7 @@ def create_app(config_name):
         response.status_code = 200
         return response
 
-    @app.route('/student/<int:id>', methods=['DELETE'])
+    @app.route('/student/<int:id>/', methods=['DELETE'])  # admin
     # @auth.login_required
     def delete_student(id):
         if request.method == "DELETE":
@@ -352,16 +440,23 @@ def create_app(config_name):
                            "message": "Student {} deleted successfully".format(student.id)
                        }, 200
 
-    @app.route('/students/<int:student_id>/my_courses', methods=['GET'])
+    @app.route('/students/<int:student_id>/my_courses/', methods=['GET'])
     @auth.login_required
     def student_courses(student_id):
         student = Student.query.filter_by(id=student_id).first()
         email = auth.current_user()
-        if not Student.query.filter_by(email=email).first():
+        admin = Admin.query.filter_by(email=email).first()
+
+        if not student:
+            return {"ERROR": "Немає даного студента", "STATUS CODE": 405}
+        if not Student.query.filter_by(email=email).first() and not admin:
             teacher = Teacher.query.filter_by(email=email).first()
             if teacher:
                 return bad_role('teacher')
             return {"ERROR": "Немає студента", "STATUS CODE": 404}
+        if(not admin):
+            if (student.email != email):
+                return {"Помилка доступу": "Ви не можете переглядати курси іншого студента"}
 
         # GET
         obj = {
@@ -389,10 +484,15 @@ def create_app(config_name):
         course_id = str(request.data.get('course_id', ''))
         teacher_id = str(request.data.get('teacher_id', ''))
         email = auth.current_user()
+        admin = Admin.query.filter_by(email=email).first()
         if not Student.query.filter_by(email=email).first():
             teacher = Teacher.query.filter_by(email=email).first()
             if teacher:
                 return bad_role('teacher')
+        if(not admin):
+            if (Student.query.filter_by(id=student_id).first().email != email):
+                return {"Помилка доступу": "Ви не можете подати заявку на долучення на курс іншого студента"}
+
         if (not student_id and not course_id and not teacher_id):
             return {"ERROR": "Введіть всі поля  student_id and  course_id and  teacher_id", "STATUS CODE": "405"}
 
@@ -403,12 +503,16 @@ def create_app(config_name):
         course_invite.save()
         return jsonify([{"status_accepted": False, "course_id": course_id, "student_id": student_id}])
 
-    @app.route('/teachers/my_invites/<int:id>', methods=['GET'])
+    @app.route('/teachers/my_invites/<int:id>/', methods=['GET'])
     @auth.login_required
     def teacher_invites(id):
         teachers = [Teacher.query.filter_by(id=id).first()]
         email = auth.current_user()
-        if not Teacher.query.filter_by(email=email).first():
+        admin = Admin.query.filter_by(email=email).first()
+        if(not admin):
+            if (Teacher.query.filter_by(id=id).first().email != email):
+                return {"Помилка доступу": "Ви можете переглядати тільки перелік свої запитів на курс"}
+        if not Teacher.query.filter_by(email=email).first() and not admin:
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
@@ -435,19 +539,18 @@ def create_app(config_name):
                 students_arr = []
                 for std in course.course_students:
                     students_arr.append({"id": std.id, "firstname": std.firstname, "lastname": std.lastname})
-                # obj['courses'].append(({"id": course.id, "limit": course.limit, "title": course.courseName,
-                #                         "author": course.author, "students": (students_arr)}))
             results.append(obj)
 
         response = jsonify(results)
         response.status_code = 200
         return response
 
-    @app.route('/teacher/accept_invite/<int:id>', methods=['GET'])
+    @app.route('/teacher/accept_invite/<int:id>/', methods=['GET'])
     @auth.login_required
     def accept_invite(id):
         email = auth.current_user()
-        if not Teacher.query.filter_by(email=email).first():
+        admin = Admin.query.filter_by(email=email).first()
+        if not Teacher.query.filter_by(email=email).first() and not admin:
             student = Student.query.filter_by(email=email).first()
             if student:
                 return bad_role('student')
@@ -468,7 +571,7 @@ def create_app(config_name):
         else:
             return {"ERROR": "Немає місця", "limit": this_course.limit}
 
-    @app.route('/courses', methods=['GET'])
+    @app.route('/courses/', methods=['GET'])
     def get_courses():
         courses = Course.get_all()
         result = []
@@ -485,7 +588,21 @@ def create_app(config_name):
         response.status_code = 200
         return response
 
-    @app.route('/courses/<int:id>', methods=['DELETE'])
+    @app.route('/courses/<int:id>/', methods=['GET'])
+    def get_course(id):
+        if request.method == "GET":
+            course = Course.query.filter_by(id=id).first()
+            obj = {
+                "id": course.id,
+                "courseName": course.courseName,
+                "author": course.author,
+                "limit": course.limit,
+            }
+            response = jsonify(obj)
+            response.status_code = 200
+            return response
+
+    @app.route("/courses/<int:id>/", methods=['DELETE'])
     def del_course(id):
         course = Course.query.filter_by(id=id).first()
         if not course:
@@ -496,5 +613,26 @@ def create_app(config_name):
             return {
                        "message": "Course {} deleted successfully".format(course.id)
                    }, 200
+
+    @app.route('/students/<int:id>/', methods=['GET'])
+    def student(id):
+        if request.method == "GET":
+            student = Student.query.filter_by(id=id).first()
+
+            if not student:
+                return {"ERROR": "Немає студента", "STATUS CODE": 404}
+
+            # GET
+            obj = {
+                'id': student.id,
+                'firstname': student.firstname,
+                'lastname': student.lastname,
+                'username': student.username,
+                'email': student.email,
+                'role': student.role
+            }
+            response = jsonify(obj)
+            response.status_code = 200
+            return response
 
     return app
